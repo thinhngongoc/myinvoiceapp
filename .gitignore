@@ -1,0 +1,20 @@
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/ # CỰC KỲ QUAN TRỌNG: Không push môi trường ảo
+*.env # Nếu bạn dùng file .env cho biến môi trường cục bộ
+.mypy_cache/
+.pytest_cache/
+.ipynb_checkpoints
+.vscode/
+*.sqlite3 # Nếu bạn có dùng SQLite cục bộ
+
+# macOS specific
+.DS_Store
+
+# Windows specific
+Thumbs.db

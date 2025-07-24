@@ -50,69 +50,101 @@ def on_startup():
         try:
             session = next(session_generator)
 
+            # Biến cờ để kiểm tra xem có thay đổi nào cần commit không
+            changes_made = False
+
             # 1. Tạo tài khoản admin
             if not crud.get_user_by_username(session, "admin"):
+                print("Admin user 'admin' not found, attempting to create...")
                 try:
-                    admin_user_data = schemas.UserCreate(username="admin", password="0936266648")
-                    crud.create_user(session, admin_user_data, is_admin=True)
-                    print("Admin user 'admin' created with password '0936266648'")
+                    # crud.create_user giờ không commit, chỉ add vào session
+                    crud.create_user(session, schemas.UserCreate(username="admin", password="0936266648"), is_admin=True)
+                    print("Admin user 'admin' added to session.")
+                    changes_made = True
                 except IntegrityError:
-                    session.rollback()
-                    print("Admin user 'admin' already exists or could not be created due to integrity error.")
+                    print("Admin user 'admin' already exists (IntegrityError).")
+                    # Không cần rollback ở đây vì chưa commit
                 except Exception as e:
-                    session.rollback()
-                    print(f"Error creating admin user 'admin': {e}")
+                    print(f"Error adding admin user 'admin' to session: {e}")
+                    import traceback
+                    traceback.print_exc()
+
             else:
                 print("Admin user 'admin' already exists.")
 
             # 2. Tạo tài khoản ketoan1
             if not crud.get_user_by_username(session, "ketoan1"):
+                print("User 'ketoan1' not found, attempting to create...")
                 try:
-                    ketoan1_user_data = schemas.UserCreate(username="ketoan1", password="123456a@")
-                    crud.create_user(session, ketoan1_user_data, is_admin=False)
-                    print("User 'ketoan1' created with password '123456a@'")
+                    # crud.create_user giờ không commit, chỉ add vào session
+                    crud.create_user(session, schemas.UserCreate(username="ketoan1", password="123456a@"), is_admin=False)
+                    print("User 'ketoan1' added to session.")
+                    changes_made = True
                 except IntegrityError:
-                    session.rollback()
-                    print("User 'ketoan1' already exists or could not be created due to integrity error.")
+                    print("User 'ketoan1' already exists (IntegrityError).")
                 except Exception as e:
-                    session.rollback()
-                    print(f"Error creating user 'ketoan1': {e}")
+                    print(f"Error adding user 'ketoan1' to session: {e}")
+                    import traceback
+                    traceback.print_exc()
             else:
                 print("User 'ketoan1' already exists.")
 
             # 3. Tạo tài khoản ketoan2
             if not crud.get_user_by_username(session, "ketoan2"):
+                print("User 'ketoan2' not found, attempting to create...")
                 try:
-                    ketoan2_user_data = schemas.UserCreate(username="ketoan2", password="123456a@")
-                    crud.create_user(session, ketoan2_user_data, is_admin=False)
-                    print("User 'ketoan2' created with password '123456a@'")
+                    # crud.create_user giờ không commit, chỉ add vào session
+                    crud.create_user(session, schemas.UserCreate(username="ketoan2", password="123456a@"), is_admin=False)
+                    print("User 'ketoan2' added to session.")
+                    changes_made = True
                 except IntegrityError:
-                    session.rollback()
-                    print("User 'ketoan2' already exists or could not be created due to integrity error.")
+                    print("User 'ketoan2' already exists (IntegrityError).")
                 except Exception as e:
-                    session.rollback()
-                    print(f"Error creating user 'ketoan2': {e}")
+                    print(f"Error adding user 'ketoan2' to session: {e}")
+                    import traceback
+                    traceback.print_exc()
             else:
                 print("User 'ketoan2' already exists.")
 
+            # THỰC HIỆN COMMIT CUỐI CÙNG NẾU CÓ THAY ĐỔI
+            if changes_made:
+                try:
+                    session.commit()
+                    print("All initial users committed successfully.")
+                except Exception as e:
+                    session.rollback() # Rollback nếu commit cuối cùng thất bại
+                    print(f"Error during final commit of initial users: {e} (rolled back)")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print("No new users to commit.")
+
+        except Exception as e:
+            print(f"!!! CRITICAL ERROR DURING ON_STARTUP SESSION MANAGEMENT: {e}")
+            import traceback
+            traceback.print_exc()
+            # Đảm bảo rollback nếu có lỗi lớn không được bắt ở trên
+            if session:
+                session.rollback()
+                print("Session rolled back due to critical error.")
         finally:
             if session:
                 try:
                     session.close()
                 except Exception as e:
-                    print(f"Error closing session in on_startup: {e}")
+                    print(f"Error closing session in on_startup finally block: {e}")
             try:
                 session_generator.close()
             except StopIteration:
                 pass
             except Exception as e:
-                print(f"Error during session generator cleanup in on_startup: {e}")
+                print(f"Error during session generator cleanup in on_startup finally block: {e}")
 
     except Exception as e:
         print(f"!!! CRITICAL ERROR IN ON_STARTUP: {e}")
         import traceback
         traceback.print_exc()
-
+        
 # --- Authentication API Endpoints (cần được đặt sau cấu hình app) ---
 @app.get("/forgot-password-page", response_class=HTMLResponse, summary="Forgot Password Page")
 async def forgot_password_page(request: Request):

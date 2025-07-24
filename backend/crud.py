@@ -110,40 +110,33 @@ def get_user_by_username(session: Session, username: str) -> User | None:
     """Lấy thông tin người dùng theo username."""
     return session.exec(select(User).where(User.username == username)).first()
 
-# Loại bỏ get_user_by_email vì không dùng email nữa
-# def get_user_by_email(session: Session, email: str) -> User | None:
-#     """Lấy thông tin người dùng theo email."""
-#     return session.exec(select(User).where(User.email == email)).first()
-
-def create_user(session: Session, user_create: UserCreate, is_admin: bool = False) -> User: # <--- THÊM 'is_admin: bool = False' vào đây
-    """Tạo người dùng mới với mật khẩu đã băm."""
+def create_user(session: Session, user_create: UserCreate, is_admin: bool = False) -> User:
+    """
+    Tạo người dùng mới với mật khẩu đã băm.
+    Hàm này KHÔNG TỰ ĐỘNG COMMIT. Caller (người gọi hàm) phải quản lý commit.
+    """
     db_user = User(
         username=user_create.username,
-        # Loại bỏ email=user_create.email,
         hashed_password=auth.get_password_hash(user_create.password),
         is_active=True,
-        is_admin=is_admin # <--- THAY ĐỔI DÒNG NÀY để dùng giá trị từ tham số
+        is_admin=is_admin
     )
     session.add(db_user)
-    session.commit()
-    session.refresh(db_user)
-    return db_user
+    # LOẠI BỎ CÁC DÒNG NÀY:
+    # session.commit()
+    # session.refresh(db_user)
+    return db_user # Trả về db_user để caller có thể refresh nếu cần
+
 def update_user_password(session: Session, user: User, new_password: str) -> User:
     """
     Cập nhật mật khẩu băm của người dùng và lưu vào database.
     """
     from backend.auth import get_password_hash
-    # Hash mật khẩu mới
     hashed_new_password = get_password_hash(new_password)
-
-    # Cập nhật trường hashed_password của đối tượng user
     user.hashed_password = hashed_new_password
-
-    # Thêm user vào session và commit thay đổi
-    session.add(user) # Đảm bảo đối tượng user đang được theo dõi bởi session
-    session.commit()   # Lưu thay đổi vào database
-    session.refresh(user) # Tải lại đối tượng user từ database để có dữ liệu mới nhất (đặc biệt nếu có updated_at)
-
+    session.add(user)
+    session.commit()
+    session.refresh(user)
     return user
 # --- CRUD for Invoices ---
 def get_invoice(session: Session, mahd: str) -> Invoice | None:
@@ -337,21 +330,3 @@ def cancel_invoice(session: Session, mahd: str, cancel_user: str) -> Invoice | N
     session.refresh(invoice)
 
     return invoice
-
-def update_user_password(session: Session, user: User, new_password: str) -> User:
-    """
-    Cập nhật mật khẩu băm của người dùng và lưu vào database.
-    """
-    from backend.auth import get_password_hash # This line is now CORRECT!
-    # Hash mật khẩu mới
-    hashed_new_password = get_password_hash(new_password) # This line is now CORRECT!
-
-    # Cập nhật trường hashed_password của đối tượng user
-    user.hashed_password = hashed_new_password
-
-    # Thêm user vào session và commit thay đổi
-    session.add(user) # Đảm bảo đối tượng user đang được theo dõi bởi session
-    session.commit()   # Lưu thay đổi vào database
-    session.refresh(user) # Tải lại đối tượng user từ database để có dữ liệu mới nhất (đặc biệt nếu có updated_at)
-
-    return user

@@ -64,7 +64,7 @@ async def get_current_user(
         if username is None:
             logger.warning("Username 'sub' not found in token payload.")
             raise credentials_exception
-        token_data = TokenData(username=username)
+        token_data = TokenData(username=username.lower())
     except JWTError as e:
         logger.error(f"JWT Error during token decode: {e}")
         raise credentials_exception

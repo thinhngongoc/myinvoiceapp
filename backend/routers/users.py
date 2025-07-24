@@ -204,27 +204,3 @@ async def admin_reset_user_password(
 @router.get("/me", response_model=User, summary="Get current user information")
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
-
-# Endpoint để tạo người dùng mới (chỉ admin) - TÙY CHỌN
-# Bạn có thể có một endpoint để admin tạo tài khoản mới nếu muốn
-# @router.post("/create", response_model=UserRead, status_code=status.HTTP_201_CREATED, summary="Admin: Create a new user")
-# async def create_new_user(
-#     user_create: schemas.UserCreate,
-#     is_admin_user: bool = False, # Tham số để xác định có phải admin không
-#     current_admin_user: User = Depends(admin_required),
-#     db: Session = Depends(get_session)
-# ):
-#     # Đảm bảo current_admin_user là admin thật sự
-#     if isinstance(current_admin_user, RedirectResponse):
-#         raise HTTPException(
-#             status_code=current_admin_user.status_code,
-#             detail="Forbidden",
-#             headers={"Location": current_admin_user.headers.get("Location", "/")}
-#         )
-#     existing_user = crud.get_user_by_username(db, user_create.username)
-#     if existing_user:
-#         raise HTTPException(status_code=400, detail="Username already registered")
-#     
-#     # Tạo người dùng, có thể truyền is_admin_user từ request nếu muốn tạo admin từ API
-#     db_user = crud.create_user(db, user_create, is_admin=is_admin_user)
-#     return db_user

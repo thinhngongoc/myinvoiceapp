@@ -21,7 +21,7 @@ class Customer(SQLModel, table=True):
     tongtienhang: float = Field(default=0.0)
     tongchietkhau: float = Field(default=0.0)
     tongthanhtoan: float = Field(default=0.0)
-    khdathanhtoan: float = Field(default=0.0)
+    khhdathanhtoan: float = Field(default=0.0)
     conno: float = Field(default=0.0)
     tenkh_khongdau: Optional[str] = Field(default=None, index=True, max_length=100)
     invoices: List["Invoice"] = Relationship(back_populates="customer")

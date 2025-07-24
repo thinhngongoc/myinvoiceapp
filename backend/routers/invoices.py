@@ -28,6 +28,7 @@ from backend.models import InvoiceStatus, Invoice, InvoiceDetail, Customer, Prod
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 templates = Jinja2Templates(directory="templates")
+
 @router.get("/generate_code/", response_model=str, summary="Generate a new invoice code")
 def get_new_invoice_code(db: Session = Depends(get_session)):
     """
@@ -93,20 +94,21 @@ def create_invoice_route(invoice_data: InvoiceCreate, db: Session = Depends(get_
         remaining_debt = final_total_amount - invoice_data.khhdathanhtoan
 
         initial_status = InvoiceStatus.UNPAID
+        # KHÔNG GÁN remaining_debt = 0 nếu nó âm ở đây nữa
         if remaining_debt <= 0:
             initial_status = InvoiceStatus.PAID
-            remaining_debt = 0
+            # BỎ DÒNG SAU: remaining_debt = 0
 
         db_invoice_new = Invoice(
             mahd=cleaned_mahd,
             makh=invoice_data.makh,
             ngaylap=invoice_data.ngaylap,
-            khdathanhtoan=invoice_data.khhdathanhtoan,
+            khhdathanhtoan=invoice_data.khhdathanhtoan,
             nguoilap=invoice_data.nguoilap,
             ghichu=invoice_data.ghichu,
             congtienhang=total_goods_amount,
             congchietkhau=total_discount_amount,
-            conno=remaining_debt,
+            conno=remaining_debt, # Giữ nguyên giá trị âm nếu có
             trangthai=initial_status,
             ngay_huy=None,
             nguoi_huy=None,
@@ -217,12 +219,24 @@ def update_invoice_route(
         if not db_invoice:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hóa đơn không tồn tại.")
 
-        if db_invoice.trangthai in [InvoiceStatus.CANCELLED, InvoiceStatus.PAID]:
+        # Hóa đơn đã hủy thì không được sửa
+        if db_invoice.trangthai == InvoiceStatus.CANCELLED:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
-                detail=f"Không thể sửa hóa đơn ở trạng thái {db_invoice.trangthai}. "
-                        "Nếu muốn chỉnh sửa hóa đơn đã thanh toán, vui lòng tạo phiếu điều chỉnh."
+                detail="Không thể sửa hóa đơn đã hủy. Vui lòng tạo hóa đơn mới nếu cần."
             )
+        
+        # Nếu hóa đơn đã thanh toán hoàn toàn và bạn muốn sửa, 
+        # hãy cân nhắc logic nghiệp vụ: có nên cho phép sửa không?
+        # Ví dụ: có thể cho phép sửa nếu số tiền trả lại khách hàng
+        # => nhưng trạng thái PAID sẽ thay đổi.
+        # Nếu bạn KHÔNG muốn cho phép sửa hóa đơn PAID, hãy bỏ comment dòng dưới:
+        # if db_invoice.trangthai == InvoiceStatus.PAID:
+        #     raise HTTPException(
+        #         status_code=status.HTTP_400_BAD_REQUEST,
+        #         detail=f"Không thể sửa hóa đơn ở trạng thái {db_invoice.trangthai}."
+        #     )
+
 
         old_makh = db_invoice.makh
         
@@ -278,12 +292,19 @@ def update_invoice_route(
 
         db_invoice.congtienhang = total_goods_amount
         db_invoice.congchietkhau = total_discount_amount
-        db_invoice.conno = total_goods_amount - total_discount_amount - db_invoice.khhdathanhtoan
+        db_invoice.khhdathanhtoan = invoice_data.khhdathanhtoan # Cập nhật số tiền đã thanh toán từ request
+        
+        # Cập nhật conno cho phép âm
+        db_invoice.conno = (total_goods_amount - total_discount_amount) - db_invoice.khhdathanhtoan
+        
         db_invoice.updated_at = datetime.now() # Cập nhật thời gian cập nhật
 
-        if db_invoice.conno <= 0 and db_invoice.trangthai != InvoiceStatus.CANCELLED:
+        # Cập nhật trạng thái DỰA TRÊN conno MỚI
+        if db_invoice.conno <= 0:
             db_invoice.trangthai = InvoiceStatus.PAID
-            db_invoice.conno = 0 
+        else:
+            db_invoice.trangthai = InvoiceStatus.UNPAID
+
 
         db.add(db_invoice) 
         db.flush() # Flush để các thay đổi trên hóa đơn và tồn kho được ghi nhận trước khi cập nhật công nợ
@@ -322,11 +343,15 @@ def record_payment_route(mahd: str, payment_data: InvoicePay, db: Session = Depe
     
     invoice.khhdathanhtoan += payment_data.amount
 
+    # Cập nhật conno cho phép âm
     invoice.conno = invoice.congtienhang - invoice.congchietkhau - invoice.khhdathanhtoan
+    
+    # Trạng thái hóa đơn chỉ chuyển sang PAID nếu conno <= 0
     if invoice.conno <= 0:
         invoice.trangthai = InvoiceStatus.PAID
-        invoice.conno = 0 
-    
+    else:
+        invoice.trangthai = InvoiceStatus.UNPAID # Đảm bảo trạng thái đúng nếu trước đó là PAID nhưng giờ lại nợ
+
     invoice.updated_at = datetime.now() # Cập nhật thời gian cập nhật
 
     db.add(invoice) 
@@ -350,9 +375,9 @@ def cancel_invoice_route(
 ):
     """
     Hủy một hóa đơn.
-    Chỉ thay đổi trạng thái hóa đơn thành CANCELLED.
-    Các giá trị tiền tệ trên hóa đơn (congtienhang, congchietkhau, khhdathanhtoan, conno) được giữ nguyên.
-    Chỉ công nợ tổng của khách hàng không tính hóa đơn đã hủy.
+    Khi hủy, các giá trị tiền tệ trên hóa đơn (congtienhang, congchietkhau, khhdathanhtoan, conno) được KHÔNG THAY ĐỔI
+    chỉ trạng thái hóa đơn là CANCELLED.
+    Công nợ tổng của khách hàng sẽ được tính toán lại, không bao gồm hóa đơn đã hủy này.
     """
     clean_mahd = mahd.strip('"').strip('\\"')
     invoice = db.exec(
@@ -382,6 +407,12 @@ def cancel_invoice_route(
     invoice.ngay_huy = datetime.now()
     invoice.nguoi_huy = cancel_user
     invoice.updated_at = datetime.now() # Cập nhật thời gian cập nhật
+
+    # KHÔNG GÁN LẠI CÁC GIÁ TRỊ TIỀN TỆ VỀ 0 NỮA TRÊN HÓA ĐƠN KHI HỦY
+    # invoice.congtienhang = 0.0
+    # invoice.congchietkhau = 0.0
+    # invoice.khhdathanhtoan = 0.0
+    # invoice.conno = 0.0
 
     db.add(invoice)
     db.flush() # Flush để các thay đổi trên hóa đơn và tồn kho được ghi nhận
@@ -497,6 +528,7 @@ async def export_invoices_to_excel(
             "Cập nhật cuối": inv.updated_at.strftime("%Y-%m-%d %H:%M:%S") if inv.updated_at else '',
             "Ngày hủy": inv.ngay_huy.strftime("%Y-%m-%d") if inv.ngay_huy else '',
             "Người hủy": inv.nguoi_huy,
+            "Mã HD thay thế": inv.mahd_thay_the if inv.mahd_thay_the else '', # Thêm cột này
         }
         data_for_df.append(invoice_row)
 
@@ -519,7 +551,7 @@ async def export_invoices_to_excel(
                     "Cập nhật cuối": "",
                     "Ngày hủy": "",
                     "Người hủy": "",
-                    "Mã HD thay thế": "",
+                    "Mã HD thay thế": "", # Để trống cho các dòng chi tiết
                     "Sản phẩm": f" -- {product_name}", # Đánh dấu là chi tiết
                     "ĐVT": detail.donvi,
                     "SL": detail.sl,

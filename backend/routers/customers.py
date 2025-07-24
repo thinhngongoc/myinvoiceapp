@@ -145,6 +145,7 @@ async def import_customers_from_excel(
                     db_customer = existing_customers_map[normalized_tenkh]
                     # Cập nhật thông tin khách hàng hiện có
                     db_customer.tenkh = tenkh_excel
+                    db_customer.tenkh_khongdau = normalized_tenkh
                     db_customer.diachi_sdt = diachi_sdt_excel
                     db_customer.ghichu = ghichu_excel
                     #db_customer.updated_at = datetime.datetime.now()

@@ -28,9 +28,15 @@
                 <th>Mã KH</th>
                 <th>Tên Khách hàng</th>
                 <th>Địa chỉ/SĐT</th>
-                <th>Tổng Tiền hàng</th>
-                <th>Tổng CK</th>
-                <th>Đã Thanh toán</th>
+                <th>Tổng Tiền hàng
+                    (Tổng các HĐ)
+                </th>
+                <th>Tổng CK
+                    (Tổng các HĐ)
+                </th>
+                <th>Đã Thanh toán
+                    (Tổng các HĐ)
+                </th>
                 <th>Công nợ</th>
                 <th>Ghi chú</th>
                 <th>Hành động</th>
@@ -76,6 +82,43 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="customerInvoicesModal" tabindex="-1" aria-labelledby="customerInvoicesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg"> <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="customerInvoicesModalLabel">Hóa đơn của Khách hàng: <span id="customerInvoicesModalCustomerName"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Mã HĐ</th>
+                                <th>Ngày lập</th>
+                                <th>Tổng tiền hàng</th>
+                                <th>Tổng CK</th>
+                                <th>Đã thanh toán</th>
+                                <th>Còn nợ</th>
+                                <th>Trạng thái</th>
+                                <th>Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customerInvoicesTableBody">
+                            <tr>
+                                <td colspan="8" class="text-center">Đang tải hóa đơn...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <nav aria-label="Invoice pagination" class="mt-3">
+                    <ul class="pagination justify-content-center" id="customerInvoicePaginationControls">
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts_extra %}
@@ -84,7 +127,9 @@
     let currentCustomerPage = 1; // Trang hiện tại cho khách hàng
     const customerItemsPerPage = 10; // Số lượng khách hàng trên mỗi trang (có thể điều chỉnh)
     let totalCustomers = 0; // Tổng số khách hàng từ API
-
+    let currentCustomerInvoicePage = 1;
+    const customerInvoiceItemsPerPage = 10; // Số lượng hóa đơn trên mỗi trang trong modal
+    let currentCustomerIdForInvoices = null; // Lưu trữ mã khách hàng đang xem hóa đơn
     async function fetchCustomers(page = currentCustomerPage, searchQuery = '') {
         // Cập nhật trang hiện tại
         currentCustomerPage = page;
@@ -127,10 +172,10 @@
                 <td>${customer.makh}</td>
                 <td>${customer.tenkh}</td>
                 <td>${customer.diachi_sdt || ''}</td>
-                <td>${formatNumber(customer.tongtienhang)}</td>
-                <td>${formatNumber(customer.tongchietkhau)}</td>
-                <td>${formatNumber(customer.khdathanhtoan)}</td> 
-                <td class="${connoClass}">${formatCurrency(customer.conno)}</td>      
+                <td>${formatCurrency(customer.tongtienhang, 0)}</td> // Đã sửa
+                <td>${formatCurrency(customer.tongchietkhau, 0)}</td> // Đã sửa
+                <td>${formatCurrency(customer.khhdathanhtoan, 0)}</td> // Đã sửa
+                <td class="${connoClass}">${formatCurrency(customer.conno, 0)}</td>    
                 <td>${customer.ghichu || ''}</td> 
                 <td>
                     <button type="button" class="btn btn-warning btn-sm edit-customer-btn"

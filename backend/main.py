@@ -258,10 +258,6 @@ async def create_new_user(
     
     return crud.create_user(db=db, user_create=user_create, is_admin=False)
 
-@app.get("/test-route")
-async def test_route_function(): # Đổi tên hàm để tránh trùng lặp nếu có
-    return {"message": "Test route is working!"}
-
 
 @app.get("/login-page", response_class=HTMLResponse, summary="Login Page")
 async def login_page_route(request: Request):
@@ -273,5 +269,4 @@ async def login_page_route(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

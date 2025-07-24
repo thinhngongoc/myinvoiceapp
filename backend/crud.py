@@ -88,18 +88,22 @@ def update_customer_debt(db: Session, makh: int):
         total_discount_amount_for_customer += inv.congchietkhau
         total_paid_by_customer += inv.khhdathanhtoan
 
+        # Calculate the current debt for *this* invoice.
+        # This is where the change is needed: remove the if invoice_current_debt < 0: invoice_current_debt = 0 line.
         invoice_current_debt = (inv.congtienhang - inv.congchietkhau) - inv.khhdathanhtoan
-        if invoice_current_debt < 0:
-            invoice_current_debt = 0
         total_remaining_debt_for_customer += invoice_current_debt
 
     customer.tongtienhang = total_goods_amount_for_customer
     customer.tongchietkhau = total_discount_amount_for_customer
-    customer.khdathanhtoan = total_paid_by_customer
-    customer.conno = total_remaining_debt_for_customer
+    
+    customer.khhdathanhtoan = total_paid_by_customer
+    customer.tongthanhtoan = total_paid_by_customer 
+
+    customer.conno = total_remaining_debt_for_customer # This will now correctly store negative values
 
     db.add(customer)
     db.flush()
+
 
 # --- CRUD for Users ---
 def get_user_by_username(session: Session, username: str) -> User | None:

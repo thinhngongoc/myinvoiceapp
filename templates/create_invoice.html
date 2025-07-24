@@ -24,7 +24,7 @@
         </div>
         <div class="col-auto align-self-center">
             <button type="button" class="btn btn-primary btn-sm" id="addCustomerBtn" data-bs-toggle="modal"
-                data-bs-target="#createCustomerModal">
+                data-bs-target="#addCustomerModal">
                 + KH
             </button>
         </div>
@@ -81,7 +81,7 @@
         </div>
         <div class="col-md-3 col-sm-6 mb-2">
             <label for="khhdathanhtoan" class="form-label">Khách đã thanh toán</label>
-            <input type="number" class="form-control" id="khhdathanhtoan" step="0.01" min="0" value="0">
+            <input type="text" class="form-control" id="khhdathanhtoan" value="0">
         </div>
         <div class="col-md-3 col-sm-6 mb-2">
             <label for="conno" class="form-label">Chưa thanh toán</label>
@@ -138,12 +138,11 @@
         </div>
     </div>
 </div>
-<div class="modal fade" id="createCustomerModal" tabindex="-1" aria-labelledby="createCustomerModalLabel"
-    aria-hidden="true">
+<div class="modal fade" id="addCustomerModal" tabindex="-1" aria-labelledby="addCustomerModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="createCustomerModalLabel">Thêm Khách hàng mới</h5>
+                <h5 class="modal-title" id="addCustomerModalLabel">Thêm Khách hàng mới</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -153,11 +152,9 @@
                         <input type="text" class="form-control" id="newCustomerTenkh" name="tenkh" required>
                     </div>
                     <div class="mb-3">
-                        <label for="newCustomerDiachiSdt" class="form-label">Địa chỉ/SĐT</label> {# Đã gộp label #}
-                        <input type="text" class="form-control" id="newCustomerDiachiSdt" name="diachi_sdt"> {# Đã gộp
-                        input và đổi ID, name #}
+                        <label for="newCustomerDiachiSdt" class="form-label">Địa chỉ/SĐT</label>
+                        <input type="text" class="form-control" id="newCustomerDiachiSdt" name="diachi_sdt">
                     </div>
-                    {# Xóa hoàn toàn div mb-3 cho SĐT ở đây #}
                     <div class="mb-3">
                         <label for="newCustomerGhichu" class="form-label">Ghi chú</label>
                         <textarea class="form-control" id="newCustomerGhichu" name="ghichu" rows="3"></textarea>
@@ -245,7 +242,7 @@
         // 1. Reset các trường input chính của form về giá trị mặc định hoặc rỗng
         $('#invoiceForm')[0].reset();
         $('#mahd').val(''); // Đặt rỗng tạm thời trước khi fetch mã mới
-        $('#khhdathanhtoan').val(formatNumber(0)); // Reset số tiền đã thanh toán về 0
+        $('#khhdathanhtoan').val(formatCurrency(0, 0)); 
 
         // 2. Clear các Select2
         $('#makh').val(null).trigger('change');
@@ -296,43 +293,43 @@
     // Thêm một dòng sản phẩm mới vào hóa đơn (Đã thay đổi đáng kể)
     function addInvoiceItemRow(productData = {}) {
         const index = itemCounter++; // Tăng biến đếm và gán chỉ số
-        const rowId = `invoice-item-row-${index}`; // <<< DI CHUYỂN DÒNG NÀY LÊN ĐÂY
+        const rowId = `invoice-item-row-${index}`;
 
         const rowHtml = `
-        <div class="row mb-2 invoice-item-row product-item-row" id="${rowId}" data-index="${index}">
-            <div class="col-item text-center" style="width: 5%;">
-                <input type="text" class="form-control item-stt text-center" value="${index + 1}" readonly>
+            <div class="row mb-2 invoice-item-row product-item-row" id="${rowId}" data-index="${index}">
+                <div class="col-item text-center" style="width: 5%;">
+                    <input type="text" class="form-control item-stt text-center" value="${index + 1}" readonly>
+                </div>
+                <div class="col-item" style="width: 30%;">
+                    <input type="hidden" class="masp-hidden" id="masp_${index}" value="${productData.masp || ''}">
+                    <input type="text" class="form-control tensp-display" id="tensp_${index}" value="${productData.tensp || ''}" readonly>
+                </div>
+                <div class="col-item text-center" style="width: 7%;">
+                    <input type="text" class="form-control donvi text-center" id="donvi_${index}" value="${productData.donvi || ''}" readonly>
+                </div>
+                <div class="col-item text-center" style="width: 8%;">
+                    <input type="number" class="form-control quantity text-center" id="sl_${index}" value="${productData.sl || 1}" min="1" required>
+                </div>
+                <div class="col-item text-center" style="width: 15%;">
+                    <input type="text" class="form-control price text-end" id="dongia_${index}" value="${formatCurrency(productData.dongia || 0, 0)}" required>
+                </div>
+                <div class="col-item text-center" style="width: 7%;">
+                    <input type="number" class="form-control discount text-center" id="ck_${index}" value="${productData.ck || 0}" min="0" max="100" step="0.5">
+                </div>
+                <div class="col-item text-end" style="width: 20%;">
+                    <input type="text" class="form-control subtotal text-end" id="thanhtien_${index}" readonly>
+                </div>
+                <div class="col-item d-flex align-items-end justify-content-end" style="width: 6%;">
+                    <button type="button" class="btn btn-sm btn-outline-secondary view-price-history-row-btn me-1" 
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="Xem lịch sử giá"
+                            data-masp="${productData.masp || ''}" data-tensp="${productData.tensp || ''}">
+                        <i class="bi bi-clock-history"></i>
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm remove-item ${index === 0 ? 'd-none' : ''}"
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="Xóa dòng">Xóa</button>
+                </div>
             </div>
-            <div class="col-item" style="width: 30%;">
-                <input type="hidden" class="masp-hidden" id="masp_${index}" value="${productData.masp || ''}">
-                <input type="text" class="form-control tensp-display" id="tensp_${index}" value="${productData.tensp || ''}" readonly>
-            </div>
-            <div class="col-item text-center" style="width: 7%;">
-                <input type="text" class="form-control donvi text-center" id="donvi_${index}" value="${productData.donvi || ''}" readonly>
-            </div>
-            <div class="col-item text-center" style="width: 8%;">
-                <input type="number" class="form-control quantity text-center" id="sl_${index}" value="${productData.sl || 1}" min="1" required>
-            </div>
-            <div class="col-item text-center" style="width: 15%;">
-                <input type="text" class="form-control price text-end" id="dongia_${index}" value="${formatNumber(productData.dongia || 0)}" required>
-            </div>
-            <div class="col-item text-center" style="width: 7%;">
-                <input type="number" class="form-control discount text-center" id="ck_${index}" value="${productData.ck || 0}" min="0" max="100" step="0.5">
-            </div>
-            <div class="col-item text-end" style="width: 20%;">
-                <input type="text" class="form-control subtotal text-end" id="thanhtien_${index}" readonly>
-            </div>
-            <div class="col-item d-flex align-items-end justify-content-end" style="width: 6%;">
-                <button type="button" class="btn btn-sm btn-outline-secondary view-price-history-row-btn me-1" 
-                        data-bs-toggle="tooltip" data-bs-placement="top" title="Xem lịch sử giá"
-                        data-masp="${productData.masp || ''}" data-tensp="${productData.tensp || ''}">
-                    <i class="bi bi-clock-history"></i>
-                </button>
-                <button type="button" class="btn btn-danger btn-sm remove-item ${index === 0 ? 'd-none' : ''}"
-                        data-bs-toggle="tooltip" data-bs-placement="top" title="Xóa dòng">Xóa</button>
-            </div>
-        </div>
-        `;
+            `;
         $('#invoiceDetails').append(rowHtml);
 
         // =========================================================================
@@ -355,7 +352,7 @@
 
         $(`#dongia_${index}`).on('blur', function () {
             const rawValue = parseFormattedNumber($(this).val());
-            $(this).val(formatNumber(rawValue));
+            $(this).val(formatCurrency(rawValue, 0));
         });
 
         if (productData.masp) {
@@ -406,25 +403,34 @@
             totalInvoiceAmount += itemSubtotal;
         });
 
-        $('#congtienhang').val(formatNumber(totalGoodsAmount));
-        $('#congchietkhau').val(formatNumber(totalDiscountAmount));
-        $('#tongtienhoadon').val(formatNumber(totalInvoiceAmount)); // Ensure you have this input
+        // SỬA ĐỔI TẠI ĐÂY: Dùng formatCurrency với decimalPlaces = 0
+        $('#congtienhang').val(formatCurrency(totalGoodsAmount, 0));
+        $('#congchietkhau').val(formatCurrency(totalDiscountAmount, 0));
+        $('#tongtienhoadon').val(formatCurrency(totalInvoiceAmount, 0)); // Đảm bảo bạn có input này
 
         const paidAmount = parseFormattedNumber($('#khhdathanhtoan').val()) || 0;
         const remainingDebt = totalInvoiceAmount - paidAmount;
-        $('#conno').val(formatNumber(remainingDebt));
+        // SỬA ĐỔI TẠI ĐÂY: Dùng formatCurrency với decimalPlaces = 0
+        $('#conno').val(formatCurrency(remainingDebt, 0));
 
         // Update "Tổng tiền hóa đơn (bằng chữ)"
-        $('#tongtienhoadon_chu').text(convertNumberToVietnameseText(totalInvoiceAmount) + " đ");
+        // Bạn đã thêm " đ" ở cuối hàm convertNumberToVietnameseText.
+        // Nếu bạn muốn hiển thị "đồng" thay vì "đ", hãy xem xét lại logic trong convertNumberToVietnameseText
+        // Hiện tại: convertNumberToVietnameseText(totalInvoiceAmount) + " đ" sẽ tạo ra "X đồng đ"
+        // Nên sửa lại là: convertNumberToVietnameseText(totalInvoiceAmount)
+        $('#tongtienhoadon_chu').text(convertNumberToVietnameseText(totalInvoiceAmount)); // Bỏ "+ " đ"
 
-        // >>> ADD THIS LOGIC TO UPDATE "CÒN NỢ (BẰNG CHỮ)" <<<
+        // >>> SỬA LOGIC CỦA "CÒN NỢ (BẰNG CHỮ)" <<<
         let connoText = "";
         if (remainingDebt < 0) {
-            connoText = "Khách hàng trả thừa " + convertNumberToVietnameseText(Math.abs(remainingDebt)) + " đ";
+            // Hàm convertNumberToVietnameseText đã tự thêm "đồng" hoặc "xu" vào cuối.
+            // Tránh thêm " đ" một lần nữa.
+            connoText = "Khách hàng trả thừa " + convertNumberToVietnameseText(Math.abs(remainingDebt));
         } else if (remainingDebt > 0) {
             connoText = convertNumberToVietnameseText(remainingDebt);
         } else {
-            connoText = "Không đ";
+            // Nếu không nợ, hiển thị "Không đồng" (hoặc "Đã thanh toán đủ")
+            connoText = "Không đồng"; // Hoặc "Đã thanh toán đủ" nếu phù hợp hơn
         }
         // Update the HTML element with id "conno_chu"
         $('#conno_chu').text(connoText);
@@ -580,7 +586,7 @@
                     $('#mahd').val(invoice.mahd);
                     updateCustomerSelect2(invoice.makh);
                     $('#ngaylap').val(invoice.ngaylap);
-                    $('#khhdathanhtoan').val(formatNumber(invoice.khdathanhtoan));
+                    $('#khhdathanhtoan').val(formatCurrency(invoice.khhdathanhtoan, 0));
                     $('#nguoilap').val(invoice.nguoilap);
                     $('#ghichu').val(invoice.ghichu);
 
@@ -620,9 +626,6 @@
                 console.log('Invoice form initialized for new mode. isFormDirty:', isFormDirty);
             }
         }
-
-        // =========================================================================
-        // SELECT2 INITIALIZATION
         // =========================================================================
         $('#makh').select2({
             placeholder: 'Tìm khách hàng...',
@@ -708,7 +711,7 @@
         // =========================================================================
         $('#openAddCustomerModal').on('click', function () {
             $('#newCustomerForm')[0].reset();
-            $('#addCustomerModal').modal('show');
+            $('#addCustomerModal').modal('show'); // Đã sửa từ addCustomerModal
         });
 
         $('#newCustomerForm').on('submit', async function (event) {
@@ -735,7 +738,7 @@
 
                 const addedCustomer = await response.json();
                 Swal.fire('Thành công!', 'Đã thêm khách hàng mới.', 'success');
-                const customerModal = bootstrap.Modal.getInstance(document.getElementById('addCustomerModal')) || new bootstrap.Modal(document.getElementById('addCustomerModal'));
+                const customerModal = bootstrap.Modal.getInstance(document.getElementById('addCustomerModal')) || new bootstrap.Modal(document.getElementById('addCustomerModal')); // Đã sửa
                 customerModal.hide(); // Sử dụng ID đúng của modal khách hàng
 
                 const select = $('#makh');
@@ -744,7 +747,6 @@
                     select.append(newOption);
                 }
                 select.val(addedCustomer.makh).trigger('change');
-                // Tùy chọn: Reset form sau khi đóng modal để chuẩn bị cho lần mở modal tiếp theo
                 $('#newCustomerForm')[0].reset();
             } catch (error) {
                 console.error('Lỗi khi thêm khách hàng mới:', error);
@@ -1092,7 +1094,7 @@
                 mahd: mahdCurrent,
                 makh: parseInt(makhVal),
                 ngaylap: $('#ngaylap').val(),
-                khdathanhtoan: parseFormattedNumber($('#khhdathanhtoan').val()),
+                khhdathanhtoan: parseFormattedNumber($('#khhdathanhtoan').val()),
                 nguoilap: $('#nguoilap').val(),
                 ghichu: $('#ghichu').val(),
                 details: invoiceDetails,

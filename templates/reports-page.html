@@ -41,7 +41,7 @@
         </div>
     </div>
 
-    <hr>
+    ---
 
     <div id="reportSummary" class="mb-4">
         <h3>Tóm tắt Doanh thu & Công nợ</h3>
@@ -82,11 +82,12 @@
                         <th>STT</th>
                         <th>Mã KH</th>
                         <th>Tên Khách hàng</th>
+                        {# UPDATED: Cập nhật tiêu đề cột để phản ánh đúng dữ liệu từ API và gọn hơn #}
                         <th>Tổng Tiền Hàng (VNĐ)</th>
                         <th>Tổng Chiết Khấu (VNĐ)</th>
-                        <th>Tổng Hóa Đơn (VNĐ)</th>
+                        <th>Tổng Hóa Đơn (VNĐ)</th> {# Đây là (Tiền Hàng - Chiết Khấu) của hóa đơn trong kỳ #}
                         <th>Đã Thanh Toán (VNĐ)</th>
-                        <th>Công Nợ (VNĐ)</th>
+                        <th>Còn Nợ (Trong kỳ) (VNĐ)</th> {# Đổi tên rõ ràng hơn #}
                     </tr>
                 </thead>
                 <tbody id="reportTableBody">
@@ -158,9 +159,10 @@
                 console.log("Report data received:", reportData);
 
                 // Cập nhật tóm tắt
-                $('#totalRevenue').text(formatNumber(reportData.total_revenue || 0));
-                $('#totalPaid').text(formatNumber(reportData.total_paid_amount || 0));
-                $('#totalOutstandingDebt').text(formatNumber(reportData.total_customer_debt || 0));
+                // SỬA ĐỔI TẠI ĐÂY: Dùng formatCurrency với decimalPlaces = 0
+                $('#totalRevenue').text(formatCurrency(reportData.total_revenue || 0, 0));
+                $('#totalPaid').text(formatCurrency(reportData.total_paid_amount || 0, 0));
+                $('#totalOutstandingDebt').text(formatCurrency(reportData.total_customer_debt || 0, 0));
 
                 // Cập nhật chi tiết theo khách hàng
                 const tableBody = $('#reportTableBody');
@@ -173,11 +175,11 @@
                                 <td>${index + 1}</td>
                                 <td>${detail.makh}</td>
                                 <td>${detail.tenkh}</td>
-                                <td>${formatNumber(detail.total_goods_amount || 0)}</td>
-                                <td>${formatNumber(detail.total_discount_amount || 0)}</td>
-                                <td>${formatNumber(detail.total_invoice_amount || 0)}</td>
-                                <td>${formatNumber(detail.total_paid_amount || 0)}</td>
-                                <td>${formatNumber(detail.current_debt || 0)}</td>
+                                <td>${formatCurrency(detail.total_goods_amount_in_period || 0, 0)}</td>
+                                <td>${formatCurrency(detail.total_discount_amount_in_period || 0, 0)}</td>
+                                <td>${formatCurrency(detail.total_invoice_amount_in_period || 0, 0)}</td>
+                                <td>${formatCurrency(detail.total_paid_amount_in_period || 0, 0)}</td>
+                                <td>${formatCurrency(detail.total_remaining_debt_in_period || 0, 0)}</td>
                             </tr>
                         `;
                         tableBody.append(row);
@@ -201,5 +203,8 @@
         // Tự động tạo báo cáo khi tải trang lần đầu
         generateReport();
     });
+
+    // Hàm formatNumber không cần định nghĩa lại ở đây vì nó đã có trong base.html
+    // Nếu bạn muốn override hoặc tùy chỉnh, bạn có thể định nghĩa lại nó ở đây.
 </script>
 {% endblock %}

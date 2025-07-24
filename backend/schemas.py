@@ -1,6 +1,6 @@
 # backend/schemas.py
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr, ValidationError, model_validator # <-- Add model_validator here
 from typing import Optional, List
 from datetime import datetime, date
 
@@ -10,10 +10,20 @@ class AdminResetPassword(BaseModel):
     target_username: str = Field(..., min_length=3, max_length=50, description="Tên đăng nhập của người dùng cần đặt lại mật khẩu")
     new_password: str = Field(..., min_length=6, max_length=50, description="Mật khẩu mới cho người dùng")
     confirm_new_password: str = Field(..., min_length=6, max_length=50, description="Xác nhận mật khẩu mới")
+    @model_validator(mode='after')
+    def check_passwords_match(self) -> 'AdminResetPassword':
+        if self.new_password != self.confirm_new_password:
+            raise ValueError("Mật khẩu mới và xác nhận mật khẩu mới không khớp.")
+        return self
 class UserChangePassword(BaseModel):
     old_password: str = Field(min_length=6, max_length=50)
     new_password: str = Field(min_length=6, max_length=50)
     confirm_new_password: str = Field(min_length=6, max_length=50)
+    @model_validator(mode='after')
+    def check_passwords_match(self) -> 'UserChangePassword':
+        if self.new_password != self.confirm_new_password:
+            raise ValueError("Mật khẩu mới và xác nhận mật khẩu mới không khớp.")
+        return self
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     # Loại bỏ email: Optional[EmailStr] = None
@@ -24,7 +34,7 @@ class UserCreate(UserBase):
 class UserRead(UserBase):
     id: int
     is_active: bool
-    is_admin: bool
+    is_admin: bool  
 
     class Config:
         from_attributes = True
@@ -59,7 +69,7 @@ class CustomerRead(CustomerBase):
     tongtienhang: float
     tongchietkhau: float
     tongthanhtoan: float
-    khdathanhtoan: float
+    khhdathanhtoan: float
     conno: float
 
     class Config:
@@ -129,8 +139,20 @@ class InvoiceCreate(InvoiceBase):
     mahd: Optional[str] = None
     details: List[InvoiceDetailCreate]
 
-class InvoiceUpdate(InvoiceBase):
-    details: List[InvoiceDetailCreate]
+class InvoiceUpdate(BaseModel): # <--- BỎ InvoiceBase ở đây
+    makh: Optional[int] = None
+    ngaylap: Optional[date] = None
+    
+    # Quan trọng: Làm cho khhdathanhtoan là Optional
+    khhdathanhtoan: Optional[float] = Field(None, ge=0) 
+    
+    trangthai: Optional[InvoiceStatus] = None
+    nguoilap: Optional[str] = None
+    ghichu: Optional[str] = None
+    
+    # Giữ details ở đây nếu bạn muốn cập nhật chi tiết cùng lúc với các trường khác
+    # Lưu ý: Việc cập nhật danh sách details có thể cần logic phức tạp hơn
+    details: Optional[List[InvoiceDetailCreate]] = None 
 
 class InvoiceRead(InvoiceBase):
     mahd: str
@@ -142,7 +164,6 @@ class InvoiceRead(InvoiceBase):
     
     ngay_huy: Optional[datetime] = None
     nguoi_huy: Optional[str] = None
-    mahd_thay_the: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     class Config:

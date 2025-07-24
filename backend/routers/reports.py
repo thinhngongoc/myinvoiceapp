@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, func, or_
 from typing import Optional, List
 from datetime import date, timedelta
-from pydantic import BaseModel, ConfigDict # <-- Đảm bảo dòng này có BaseModel và ConfigDict
+from pydantic import BaseModel, ConfigDict
 
 from ..database import get_session
 from ..models import Invoice, InvoiceDetail, Customer #, Product
@@ -10,38 +10,33 @@ from ..models import Invoice, InvoiceDetail, Customer #, Product
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 # Pydantic models for report data
-class CustomerReportDetail(BaseModel): # <-- CHẮC CHẮN LÀ BASEMODEL, KHÔNG PHẢI CUSTOMER
+class CustomerReportDetail(BaseModel):
     makh: int
     tenkh: str
     diachi_sdt: Optional[str] = None
     ghichu: Optional[str] = None
 
-    # conno của khách hàng trong bảng Customer (công nợ tích lũy)
-    conno_from_customer_table: float = 0.0 # Đổi tên để tránh nhầm lẫn
+    # Total accumulated outstanding debt for the customer from the Customer table (current overall debt)
+    total_outstanding_debt_customer: float = 0.0
 
-    total_goods_amount: float = 0.0
-    total_discount_amount: float = 0.0
-    total_invoice_amount: float = 0.0 # congtienhang - congchietkhau
-    total_paid_amount: float = 0.0 # khdathanhtoan của các hóa đơn trong kỳ
-    current_debt_in_period: float = 0.0 # conno của các hóa đơn trong kỳ
+    # Amounts specifically from invoices within the *reporting period*
+    total_goods_amount_in_period: float = 0.0
+    total_discount_amount_in_period: float = 0.0
+    total_invoice_amount_in_period: float = 0.0 # congtienhang - congchietkhau
+    total_paid_amount_in_period: float = 0.0 # khdathanhtoan of invoices within the period
+    total_debt_from_invoices_in_period: float = 0.0 # conno of invoices within the period
 
-    model_config = ConfigDict(from_attributes=True) # Dùng cho Pydantic v2
-    # Nếu bạn dùng Pydantic v1, dùng:
-    # class Config:
-    #     from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
-class ReportSummary(BaseModel): # <-- CHẮC CHẮN LÀ BASEMODEL
-    total_revenue: float
-    total_paid_amount: float
-    total_customer_debt: float
+class ReportSummary(BaseModel):
+    total_revenue: float # Total invoice amount (goods - discount) in the period
+    total_paid_amount: float # Total paid amount in the period
+    total_customer_debt: float # Total outstanding debt from ALL customers (from Customer table)
     customer_details: List[CustomerReportDetail]
 
-    model_config = ConfigDict(from_attributes=True) # Dùng cho Pydantic v2
-    # Nếu bạn dùng Pydantic v1, dùng:
-    # class Config:
-    #     from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
-# Endpoint để lấy tổng công nợ từ tất cả khách hàng
+# Endpoint để lấy tổng công nợ từ tất cả khách hàng (không thay đổi)
 @router.get("/total-debt", response_model=dict, summary="Get total outstanding debt from all customers")
 def get_total_debt(db: Session = Depends(get_session)):
     try:
@@ -59,21 +54,26 @@ def get_report_summary(
     db: Session = Depends(get_session)
 ):
     try:
-        # Xây dựng điều kiện lọc theo ngày
+        # Validate that only one of month or quarter is provided
+        if month is not None and quarter is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Chỉ có thể cung cấp tháng hoặc quý, không phải cả hai."
+            )
+
+        # Build date filter conditions
         start_date = None
         end_date = None
 
         if month:
-            if not (1 <= month <= 12):
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tháng không hợp lệ.")
+            # No need for (1 <= month <= 12) check as Pydantic Query parameter does this
             start_date = date(year, month, 1)
             if month == 12:
                 end_date = date(year + 1, 1, 1) - timedelta(days=1)
             else:
                 end_date = date(year, month + 1, 1) - timedelta(days=1)
         elif quarter:
-            if not (1 <= quarter <= 4):
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quý không hợp lệ.")
+            # No need for (1 <= quarter <= 4) check as Pydantic Query parameter does this
             start_month = (quarter - 1) * 3 + 1
             end_month = quarter * 3
             start_date = date(year, start_month, 1)
@@ -87,85 +87,83 @@ def get_report_summary(
 
         print(f"Generating report from {start_date} to {end_date}")
 
-        # Tính tổng doanh thu, đã thanh toán, công nợ cho toàn bộ kỳ báo cáo
-        total_revenue_query = select(
+        # 1. Calculate overall summary for the reporting period
+        overall_summary_query = select(
             func.sum(Invoice.congtienhang - Invoice.congchietkhau).label('total_revenue'),
             func.sum(Invoice.khhdathanhtoan).label('total_paid_amount'),
-            func.sum(Invoice.conno).label('total_outstanding_debt')
+            func.sum(Invoice.conno).label('total_debt_from_period_invoices') # Total debt from invoices in this period
         ).where(
             Invoice.ngaylap >= start_date,
             Invoice.ngaylap <= end_date,
-            Invoice.trangthai != "CANCELLED" # Không tính hóa đơn đã hủy
+            Invoice.trangthai != "CANCELLED"
         )
-        summary_row = db.exec(total_revenue_query).first()
+        overall_summary_row = db.exec(overall_summary_query).first()
 
-        total_revenue = summary_row.total_revenue if summary_row and summary_row.total_revenue is not None else 0.0
-        total_paid_amount = summary_row.total_paid_amount if summary_row and summary_row.total_paid_amount is not None else 0.0
-        total_outstanding_debt = summary_row.total_outstanding_debt if summary_row and summary_row.total_outstanding_debt is not None else 0.0
+        total_revenue_period = overall_summary_row.total_revenue if overall_summary_row and overall_summary_row.total_revenue is not None else 0.0
+        total_paid_amount_period = overall_summary_row.total_paid_amount if overall_summary_row and overall_summary_row.total_paid_amount is not None else 0.0
+
+        # 2. Get total accumulated outstanding debt from ALL customers (from Customer table)
+        # This reflects the current overall debt status, not just debt from the reporting period
+        total_customer_debt_sum_from_customer_table = db.exec(select(func.sum(Customer.conno))).first()
+        total_customer_debt_overall = total_customer_debt_sum_from_customer_table if total_customer_debt_sum_from_customer_table is not None else 0.0
         
-        # Lấy thông tin chi tiết từng khách hàng trong kỳ
-        # Lấy tất cả khách hàng
-        customers = db.exec(select(Customer)).all()
+        # 3. Optimize customer details query using GROUP BY
+        # This fetches aggregated invoice data for all customers within the period in a single query
+        customer_period_summary_query = select(
+            Invoice.makh,
+            func.sum(Invoice.congtienhang).label('total_goods_amount'),
+            func.sum(Invoice.congchietkhau).label('total_discount_amount'),
+            func.sum(Invoice.congtienhang - Invoice.congchietkhau).label('total_invoice_amount'),
+            func.sum(Invoice.khhdathanhtoan).label('total_paid_amount'),
+            func.sum(Invoice.conno).label('total_debt_from_invoices')
+        ).where(
+            Invoice.ngaylap >= start_date,
+            Invoice.ngaylap <= end_date,
+            Invoice.trangthai != "CANCELLED"
+        ).group_by(Invoice.makh)
+
+        period_summaries_by_customer = db.exec(customer_period_summary_query).all()
+
+        # Create a dictionary for quick lookup of period summaries by customer ID
+        period_summary_map = {s.makh: s for s in period_summaries_by_customer}
+
+        # 4. Get all customers from the Customer table (once)
+        all_customers = db.exec(select(Customer)).all()
         customer_details = []
 
-        for customer in customers:
-            customer_invoice_query = select(
-                func.sum(Invoice.congtienhang).label('total_goods_amount'),
-                func.sum(Invoice.congchietkhau).label('total_discount_amount'),
-                func.sum(Invoice.congtienhang - Invoice.congchietkhau).label('total_invoice_amount'),
-                func.sum(Invoice.khhdathanhtoan).label('total_paid_amount'),
-                func.sum(Invoice.conno).label('current_debt') # conno của các hóa đơn của KH trong kỳ
-            ).where(
-                Invoice.makh == customer.makh,
-                Invoice.ngaylap >= start_date,
-                Invoice.ngaylap <= end_date,
-                Invoice.trangthai != "CANCELLED"
-            )
-            customer_summary = db.exec(customer_invoice_query).first()
+        # Populate customer_details, including those with old debt but no new transactions
+        for customer in all_customers:
+            summary_in_period = period_summary_map.get(customer.makh)
 
-            if customer_summary and (customer_summary.total_goods_amount is not None or customer_summary.total_discount_amount is not None or customer_summary.total_invoice_amount is not None or customer_summary.total_paid_amount is not None or customer_summary.current_debt is not None):
-                 # Chỉ thêm vào danh sách nếu có hóa đơn trong kỳ hoặc có công nợ phát sinh trong kỳ
+            # Include customer if they had transactions in the period OR if they have current outstanding debt
+            if summary_in_period or (customer.conno is not None and customer.conno > 0):
                 customer_detail = CustomerReportDetail(
                     makh=customer.makh,
                     tenkh=customer.tenkh,
                     diachi_sdt=customer.diachi_sdt,
                     ghichu=customer.ghichu,
-                    conno=customer.conno, # Đây là tổng công nợ của khách hàng (hiện tại), giữ nguyên
-                    total_goods_amount=customer_summary.total_goods_amount if customer_summary.total_goods_amount is not None else 0.0,
-                    total_discount_amount=customer_summary.total_discount_amount if customer_summary.total_discount_amount is not None else 0.0,
-                    total_invoice_amount=customer_summary.total_invoice_amount if customer_summary.total_invoice_amount is not None else 0.0,
-                    total_paid_amount=customer_summary.total_paid_amount if customer_summary.total_paid_amount is not None else 0.0,
-                    current_debt=customer_summary.current_debt if customer_summary.current_debt is not None else 0.0 # conno của các hóa đơn của KH trong kỳ
+                    total_outstanding_debt_customer=customer.conno if customer.conno is not None else 0.0,
+                    # Values from period summary, default to 0.0 if no transactions in period
+                    total_goods_amount_in_period=summary_in_period.total_goods_amount if summary_in_period else 0.0,
+                    total_discount_amount_in_period=summary_in_period.total_discount_amount if summary_in_period else 0.0,
+                    total_invoice_amount_in_period=summary_in_period.total_invoice_amount if summary_in_period else 0.0,
+                    total_paid_amount_in_period=summary_in_period.total_paid_amount if summary_in_period else 0.0,
+                    total_debt_from_invoices_in_period=summary_in_period.total_debt_from_invoices if summary_in_period else 0.0
                 )
                 customer_details.append(customer_detail)
-            # else:
-            #     # Nếu không có hóa đơn trong kỳ, nhưng khách hàng có công nợ từ các kỳ khác, vẫn có thể muốn hiển thị
-            #     # Tùy thuộc vào yêu cầu nghiệp vụ, bạn có thể thêm khách hàng có conno > 0 vào đây
-            #     if customer.conno > 0:
-            #         customer_detail = CustomerReportDetail(
-            #             makh=customer.makh,
-            #             tenkh=customer.tenkh,
-            #             diachi_sdt=customer.diachi_sdt,
-            #             ghichu=customer.ghichu,
-            #             conno=customer.conno,
-            #             total_goods_amount=0.0,
-            #             total_discount_amount=0.0,
-            #             total_invoice_amount=0.0,
-            #             total_paid_amount=0.0,
-            #             current_debt=customer.conno # Lấy công nợ hiện tại của khách hàng
-            #         )
-            #         customer_details.append(customer_detail)
-
+        
+        # Optionally sort customer details
+        customer_details.sort(key=lambda x: x.tenkh)
 
         return ReportSummary(
-            total_revenue=total_revenue,
-            total_paid_amount=total_paid_amount,
-            total_customer_debt=total_outstanding_debt,
+            total_revenue=total_revenue_period,
+            total_paid_amount=total_paid_amount_period,
+            total_customer_debt=total_customer_debt_overall, # Use overall debt from Customer table
             customer_details=customer_details
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating report: {e}")
+        print(f"Error generating report: {e}") # Keep this for quick debugging
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Đã xảy ra lỗi khi tạo báo cáo: {e}")

@@ -17,7 +17,7 @@ from backend.models import (
 # THAY ĐỔI DÒNG DATABASE_URL NÀY ĐỂ TRỎ ĐẾN SUPABASE TRANSACTION POOLER
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres.izulhxhucaucqgfdxdwk:tK80A7QwSkgDN7f1@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require"
+    "postgresql://postgres.izulhxhucaucqgfdxdwk:Baochau2024@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require"
 )
 
 # Tạo engine cho PostgreSQL
